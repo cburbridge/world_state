@@ -8,7 +8,6 @@ import world_state.objectmaster as objectmaster
 
 from mongodb_store.message_store import MessageStoreProxy
 
-from strands_perception_msgs.msg import Table
 
 if __name__ == '__main__':
     ''' Main Program '''

@@ -7,7 +7,6 @@ project(world_state)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   rospy
-  strands_perception_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -64,7 +63,7 @@ catkin_python_setup()
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
-#   geometry_msgs#   strands_perception_msgs
+#   geometry_msgs#   
 # )
 
 ###################################
@@ -79,7 +78,7 @@ catkin_python_setup()
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES world_state
-#  CATKIN_DEPENDS geometry_msgs rospy strands_perception_msgs
+#  CATKIN_DEPENDS geometry_msgs rospy 
 #  DEPENDS system_lib
 )
 
