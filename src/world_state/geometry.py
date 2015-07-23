@@ -1,7 +1,7 @@
 import rospy
 from mongo import MongoTransformable
 import numpy as np
-from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovariance
+from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovariance, TransformStamped
 import copy
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
@@ -109,15 +109,28 @@ class Pose(MongoTransformable):
         p = cls()
         if hasattr(pose, "pose"):
             p.stamp = pose.header.stamp.to_time()
-            p.ros_frame_id = pose.header.ros_frame_id
+            p.ros_frame_id = pose.header.frame_id
             pose = pose.pose
-        p.position.x = pose.position.x
-        p.position.y = pose.position.y
-        p.position.z = pose.position.z
-        p.quaternion.x = pose.orientation.x
-        p.quaternion.y = pose.orientation.y
-        p.quaternion.z = pose.orientation.z
-        p.quaternion.w = pose.orientation.w
+        if hasattr(pose, "transform"):
+            p.stamp = pose.header.stamp.to_time()
+            p.ros_frame_id = pose.header.frame_id
+            pose = pose.transform
+            
+        if hasattr(pose, "position"):
+            pos = pose.position
+        else:
+            pos = pose.translation
+        if hasattr(pose, "orientation"):
+            rot = pose.orientation
+        else:
+            rot = pose.rotation
+        p.position.x = pos.x
+        p.position.y = pos.y
+        p.position.z = pos.z
+        p.quaternion.x = rot.x
+        p.quaternion.y = rot.y
+        p.quaternion.z = rot.z
+        p.quaternion.w = rot.w
         return p
 
     @classmethod
@@ -146,6 +159,29 @@ class Pose(MongoTransformable):
             ( q[0, 2]-q[1, 3], q[1, 2]+q[0, 3], 1.0-q[0, 0]-q[1, 1], self.position.z),
             ( 0.0, 0.0, 0.0, 1.0)
             ), dtype=np.float64)
+    
+    def to_ros_tf(self):
+        t = TransformStamped()
+        t.header.stamp = rospy.Time.from_sec(self.stamp)
+        t.header.frame_id = self.ros_frame_id
+        t.child_frame_id = ""
+        tran = t.transform.translation
+        tran.x, tran.y, tran.z = self.position.as_numpy()
+        rot = t.transform.rotation
+        rot.x, rot.y, rot.z, rot.w = self.quaternion.as_numpy
+        return t
+    
+    def to_ros_pose(self):
+        p = PoseStamped()
+        p.header.stamp = rospy.Time.from_sec(self.stamp)
+        p.header.frame_id = self.ros_frame_id
+        p.child_frame_id = ""
+        tran = p.pose.position
+        tran.x, tran.y, tran.z = self.position.as_numpy
+        rot = p.pose.orientation
+        rot.x, rot.y, rot.z, rot.w = self.quaternion.as_numpy
+
+        return p
 
 
 class BBoxArray(MongoTransformable):
@@ -215,10 +251,16 @@ def transform_PointCloud2(cloud, transform, new_frame):
     def transform_point(pt):
         return np.dot(transform, np.array([pt[0], pt[1], pt[2], 1]))[0:3]
     
-    pts = [transform_point(p) for p in pc2.read_points(cloud, ['x', 'y', 'z'])]
+    pts = [tuple(transform_point(p[:3])) + p[3:] for p in pc2.read_points(cloud,
+                                                                   ['x', 'y', 'z', 'rgb'])]
 
     header = copy.deepcopy(cloud.header)
     header.frame_id = new_frame
-    newcloud = pc2.create_cloud_xyz32(header, pts)
+    fields = [PointField('x', 0, PointField.FLOAT32, 1),
+              PointField('y', 4, PointField.FLOAT32, 1),
+              PointField('z', 8, PointField.FLOAT32, 1), 
+              PointField('rgb', 12, PointField.FLOAT32, 1)]
+    newcloud = pc2.create_cloud(header, fields, pts)
+    #newcloud = pc2.create_cloud_xyz32(header, pts)
     
     return newcloud
