@@ -35,6 +35,8 @@ class Object(MongoDocument):
         self._point_cloud = None # will be a MessageStoreObject or None
         self._bounding_box = None
         
+        self._spans = [] # for storing life spans as tuples (start,end)
+        
     # TODO: properies for all, remove MongoDocument?
     
     @property
@@ -61,14 +63,29 @@ class Object(MongoDocument):
             raise StateException("NOPOSE")
         return self._poses[-1].as_homog_matrix
         
-    def cut(self):
-        self._life_end = rospy.Time.now().to_time()
+    def cut(self, stamp=None):
+        """
+        Marks the end of the life of this object, adding an entry for its life
+        span.
+        """
+        if self._life_end is not None:
+            return
+        if stamp is not None:
+            self._life_end = stamp
+        else:
+            self._life_end = rospy.Time.now().to_time()
+        self._spans.append((self._life_start, self._life_end))
+        self._spans = self._spans
     
     def cut_all_children(self):
         world =  World()
         children = world.get_children(self.name, {'_life_end': None,})
         for i in children:
             i.cut()
+            
+    def set_life_start(self, start):
+        self._life_start = start
+        self._life_end = None
     
     @property
     def name(self):
@@ -186,7 +203,7 @@ class World(object):
     def create_object(self, object_name=None):
         new_object = Object()
         if object_name is not None:
-            new_object.set_name(object_name)
+            new_object.name = object_name
         new_id = self._mongo.database.Objects.insert(Object._mongo_encode(new_object))
         new_object._id = new_id
         new_object._connect(self._mongo)
