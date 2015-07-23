@@ -37,6 +37,18 @@ class TransformationStore(object):
                 if (transform.header.stamp -  l.header.stamp) < time_window:
                     self._transformations.appendleft(l)
             self._transformations.append(transform)
+            
+    @classmethod
+    def create_from_transforms(cls, transforms):
+        """
+        Create a store from a given set of transforms
+        transforms: Must be a list of TransformStamped messages
+        """
+        slf = cls()
+        for t in transforms:
+            slf._transformations.append(t)
+        return slf
+        
 
     @classmethod
     def create_live(cls, max_buffer=10.0):
@@ -69,7 +81,7 @@ class TransformationStore(object):
         return t
     
     @classmethod
-    def unpickle(self, pickle_string):
+    def unpickle(cls, pickle_string):
         return pickle.loads(zlib.decompress(pickle_string))
         
         
@@ -135,7 +147,48 @@ class Observation(mongo.MongoTransformable):
             typ=tf_data._type)
         rospy.loginfo("TF size: %dK" % (len(tf_data.msg)/1024) )
         return observation
-    
+
+    @classmethod
+    def make_observation_from_messages(cls, messages):
+        """
+        Creates a new observation form a list of ros messages.
+        message: list of tuples (topic,message)
+        """
+        observation = cls()
+        message_proxy = MessageStoreProxy(collection="ws_observations")
+        for topic, message in messages:
+            msg_id = message_proxy.insert(message)
+            observation._messages[topic]  = MessageStoreObject(
+                database=message_proxy.database,
+                collection=message_proxy.collection,
+                obj_id=msg_id,
+                typ=message._type)
+        return observation
+
+    @classmethod
+    def copy(cls, instance):
+        """
+        Create a copy of the instance. The MessageStoreObjects will not be
+        dupicated.
+        """
+        o = cls()
+        o.stamp = instance.stamp
+        o._messages.update(instance._messages)
+        return o
+        
+        
+    def add_message(self, message, topic):
+        """
+        Add the message to this observation under the given name.
+        """
+        message_proxy = MessageStoreProxy(collection="ws_observations")
+        msg_id = message_proxy.insert(message)
+        self._messages[topic]  = MessageStoreObject(
+            database=message_proxy.database,
+            collection=message_proxy.collection,
+            obj_id=msg_id,
+            typ=message._type)
+        
     def get_message(self, topic):
         if not self._messages.has_key(topic):
             raise StateException("NO_OBSERVATION")
